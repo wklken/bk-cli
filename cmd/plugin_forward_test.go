@@ -113,6 +113,21 @@ var _ = Describe("root plugin wiring", func() {
 		Expect(skipped).To(ConsistOf("api", "help"))
 	})
 
+	It("routes a catalog name collision to the built-in command", func() {
+		catalog := &pluginlib.Catalog{SchemaVersion: 1, Plugins: map[string]pluginlib.Definition{
+			"api": {Binary: "api-plugin", Description: "Must not replace the built-in API command"},
+		}}
+		manager := pluginlib.NewManager(catalog, GinkgoT().TempDir(), "linux", "amd64")
+		root := newRootCmdWithPluginManager(manager)
+		var stdout, stderr bytes.Buffer
+		root.SetOut(&stdout)
+		root.SetErr(&stderr)
+
+		Expect(executeRoot(root, []string{"api", "--help"})).To(Succeed())
+		Expect(stdout.String()).To(ContainSubstring("Make direct HTTP calls to any BlueKing API gateway"))
+		Expect(stderr.String()).NotTo(ContainSubstring("plugin_not_installed"))
+	})
+
 	It("shows plugins in root help with install status", func() {
 		root := newRootCmd()
 		var out bytes.Buffer
@@ -124,19 +139,35 @@ var _ = Describe("root plugin wiring", func() {
 	})
 
 	It("lets Cobra handle host help before a plugin name", func() {
-		catalog, err := pluginlib.LoadCatalog()
-		Expect(err).NotTo(HaveOccurred())
 		root := newRootCmd()
 		var stdout, stderr bytes.Buffer
 		root.SetOut(&stdout)
 		root.SetErr(&stderr)
 
 		Expect(executeRoot(root, []string{"--help", "bkms"})).To(Succeed())
-		Expect(stdout.String()).To(Or(
-			ContainSubstring("[plugin]"),
-			ContainSubstring(catalog.Plugins["bkms"].Description),
-		))
+		Expect(stdout.String()).To(ContainSubstring("Available Commands:"))
+		Expect(stdout.String()).To(ContainSubstring("Usage:\n  bk-cli [flags]"))
 		Expect(stderr.String()).NotTo(ContainSubstring("plugin_not_installed"))
+	})
+
+	It("shows unreadable install state in plugin help", func() {
+		base := GinkgoT().TempDir()
+		Expect(os.MkdirAll(filepath.Join(base, "plugins"), 0o700)).To(Succeed())
+		Expect(os.WriteFile(
+			filepath.Join(base, "plugins", "installed.yaml"),
+			[]byte("plugins: ["),
+			0o600,
+		)).To(Succeed())
+		catalog := &pluginlib.Catalog{SchemaVersion: 1, Plugins: map[string]pluginlib.Definition{
+			"bkms": {Binary: "bkms-cli", Description: "BlueKing service governance CLI"},
+		}}
+		root := newRootCmdWithPluginManager(pluginlib.NewManager(catalog, base, "linux", "amd64"))
+		var out bytes.Buffer
+		root.SetOut(&out)
+
+		Expect(root.Help()).To(Succeed())
+		Expect(out.String()).To(ContainSubstring("install state unreadable"))
+		Expect(out.String()).NotTo(ContainSubstring("(not installed)"))
 	})
 
 	It("shows plugin stub details through the help command", func() {

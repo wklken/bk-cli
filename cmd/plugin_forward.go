@@ -66,6 +66,7 @@ func splitPluginInvocation(args []string, names map[string]bool) (pluginInvocati
 		case strings.HasPrefix(arg, "--context="):
 			call.Context = strings.TrimPrefix(arg, "--context=")
 		case arg == "-h" || arg == "--help":
+			// Host help before a plugin name remains Cobra root help.
 			return pluginInvocation{}, false
 		case unsupportedHostFlags[name]:
 			if call.BadFlag == "" {
@@ -85,13 +86,15 @@ func splitPluginInvocation(args []string, names map[string]bool) (pluginInvocati
 	return pluginInvocation{}, false
 }
 
-func pluginNames(manager *pluginlib.Manager) map[string]bool {
+func pluginNames(root *cobra.Command) map[string]bool {
 	names := map[string]bool{}
-	if manager == nil {
+	if root == nil {
 		return names
 	}
-	for _, name := range manager.Catalog.Names() {
-		names[name] = true
+	for _, command := range root.Commands() {
+		if command.Annotations[pluginAnnotation] == "true" {
+			names[command.Name()] = true
+		}
 	}
 	return names
 }
@@ -107,7 +110,7 @@ func attachPluginCommands(root *cobra.Command, manager *pluginlib.Manager) []str
 			reserved[alias] = true
 		}
 	}
-	installed, _ := manager.Installed()
+	installed, installedErr := manager.Installed()
 	var skipped []string
 	for _, name := range manager.Catalog.Names() {
 		if reserved[name] {
@@ -116,7 +119,9 @@ func attachPluginCommands(root *cobra.Command, manager *pluginlib.Manager) []str
 		}
 		definition := manager.Catalog.Plugins[name]
 		status := "not installed"
-		if version := installed[name]; version != "" {
+		if installedErr != nil {
+			status = "install state unreadable"
+		} else if version := installed[name]; version != "" {
 			status = "installed " + version
 		}
 		root.AddCommand(&cobra.Command{

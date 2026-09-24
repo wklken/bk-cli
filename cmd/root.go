@@ -252,7 +252,7 @@ func Execute() error {
 }
 
 func executeRoot(root *cobra.Command, args []string) error {
-	if call, ok := splitPluginInvocation(args, pluginNames(rootPluginManager)); ok {
+	if call, ok := splitPluginInvocation(args, pluginNames(root)); ok {
 		return runPlugin(root, rootPluginManager, call)
 	}
 	args = normalizeSystemCommandBoolArgs(root, args)
