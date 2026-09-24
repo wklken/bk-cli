@@ -129,6 +129,7 @@ var _ = Describe("catalog parse", func() {
 		),
 		Entry("executable path", "executable: bkms-cli", "executable: bin/bkms-cli"),
 		Entry("unknown auth", "status: allowed", "status: allowed\n        auth: all"),
+		Entry("unknown auth on revoked", "status: revoked", "status: revoked\n        auth: all"),
 		Entry("unknown status", "status: revoked", "status: disabled"),
 		Entry("bad platform", "linux-amd64:", "linux-386:"),
 		Entry("non-canonical version", "      v1.0.4:", "      v1.0.4.0:"),

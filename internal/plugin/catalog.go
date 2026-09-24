@@ -154,14 +154,15 @@ func validateDefinition(name string, def *Definition) error {
 
 func validateRelease(name, version string, rel Release) error {
 	switch rel.Status {
-	case "revoked":
-		return nil
-	case "allowed":
+	case "revoked", "allowed":
 	default:
 		return invalidCatalog("plugin %q %s: unknown status %q", name, version, rel.Status)
 	}
 	if rel.Auth != "none" && rel.Auth != "shared" {
 		return invalidCatalog("plugin %q %s: unknown auth %q", name, version, rel.Auth)
+	}
+	if rel.Status == "revoked" {
+		return nil
 	}
 	if len(rel.Platforms) == 0 {
 		return invalidCatalog("plugin %q %s: allowed version needs platforms", name, version)
