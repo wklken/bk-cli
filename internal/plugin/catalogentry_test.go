@@ -132,6 +132,23 @@ var _ = Describe("BuildReleaseEntry", func() {
 	)
 
 	DescribeTable(
+		"rejects unsafe asset templates",
+		func(template string) {
+			_, err := BuildReleaseEntry(context.Background(), nil, EntryOptions{
+				ReleaseBaseURL: "https://example.com/rel",
+				AssetTemplate:  template,
+				Executable:     "bkms-cli",
+				Version:        "v1.0.4",
+				Auth:           "none",
+				Platforms:      []string{"linux-amd64"},
+			})
+			expectPluginError(err, CodeCatalogInvalid)
+		},
+		Entry("parent traversal", "../outside_{os}_{arch}"),
+		Entry("path separator", "a/b_{os}_{arch}"),
+	)
+
+	DescribeTable(
 		"rejects unsupported platforms",
 		func(platform string) {
 			_, err := BuildReleaseEntry(context.Background(), nil, EntryOptions{

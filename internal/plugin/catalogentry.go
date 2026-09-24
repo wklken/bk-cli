@@ -57,6 +57,9 @@ func BuildReleaseEntry(ctx context.Context, client *http.Client, opts EntryOptio
 		if err := validatePlatform(platform); err != nil {
 			return Release{}, err
 		}
+		if _, err := archiveNameForPlatform(opts, platform); err != nil {
+			return Release{}, err
+		}
 	}
 
 	if client == nil {
@@ -81,12 +84,10 @@ func BuildReleaseEntry(ctx context.Context, client *http.Client, opts EntryOptio
 
 	rel := Release{Status: "allowed", Auth: opts.Auth, Platforms: map[string]Asset{}}
 	for _, platform := range platforms {
-		goos, goarch, _ := strings.Cut(platform, "-")
-		name := strings.NewReplacer(
-			"{version}", strings.TrimPrefix(opts.Version, "v"),
-			"{os}", goos,
-			"{arch}", goarch,
-		).Replace(opts.AssetTemplate) + "." + ArchiveFormat(platform)
+		name, err := archiveNameForPlatform(opts, platform)
+		if err != nil {
+			return Release{}, err
+		}
 		expected, ok := sums[name]
 		if !ok {
 			return Release{}, SystemError(
@@ -107,7 +108,7 @@ func BuildReleaseEntry(ctx context.Context, client *http.Client, opts EntryOptio
 			)
 		}
 		exe := opts.Executable
-		if goos == "windows" {
+		if strings.HasPrefix(platform, "windows-") {
 			exe += ".exe"
 		}
 		exePath := filepath.Join(dir, platform+"-"+exe)
@@ -135,6 +136,23 @@ func BuildReleaseEntry(ctx context.Context, client *http.Client, opts EntryOptio
 		}
 	}
 	return rel, nil
+}
+
+func archiveNameForPlatform(opts EntryOptions, platform string) (string, error) {
+	goos, goarch, _ := strings.Cut(platform, "-")
+	name := strings.NewReplacer(
+		"{version}", strings.TrimPrefix(opts.Version, "v"),
+		"{os}", goos,
+		"{arch}", goarch,
+	).Replace(opts.AssetTemplate) + "." + ArchiveFormat(platform)
+	if !isSafeBasename(name) {
+		return "", UserError(
+			CodeCatalogInvalid,
+			fmt.Sprintf("archive name must be a safe basename: %q", name),
+			"",
+		)
+	}
+	return name, nil
 }
 
 func isSafeBasename(name string) bool {
