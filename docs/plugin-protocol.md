@@ -84,10 +84,10 @@ bk-cli 启动受管理的第三方进程后，会继承其 stdin、stdout、stde
 | 第三方在 Unix 上被信号 `n` 终止 | `128 + n` |
 | 第三方在 Windows 上退出 | 原样返回子进程状态中的退出码 |
 
-Unix 上，宿主监听 `SIGINT`、`SIGTERM` 和 `SIGHUP`。终端已经把 `SIGINT` 发给整个前台
-进程组，因此宿主不会再次转发 `SIGINT`；收到 `SIGTERM` 或 `SIGHUP` 时，宿主把信号
-转发给第三方并继续等待其退出。Windows 上，控制台会把 Ctrl-C/Ctrl-Break 直接送到
-第三方，宿主不会再次转发，并最终返回子进程状态中的退出码。
+Unix 上，宿主监听 `SIGINT`、`SIGQUIT`、`SIGTERM` 和 `SIGHUP`。终端已经把 `SIGINT`
+和 `SIGQUIT` 发给整个前台进程组，因此宿主不会再次转发这两个信号；收到 `SIGTERM` 或
+`SIGHUP` 时，宿主把信号转发给第三方并继续等待其退出。Windows 上，控制台会把
+Ctrl-C/Ctrl-Break 直接送到第三方，宿主不会再次转发，并最终返回子进程状态中的退出码。
 
 ## 4. 第三方必须遵循的规则
 
@@ -114,8 +114,14 @@ BK_CLI_PLUGIN_PROTOCOL 存在：
 6. 不保存、打印或记录凭据。读取后从自身环境中移除 `BK_CLI_PLUGIN_*`，启动后续子进程时
    不传递。
 7. 凭据过期时返回认证失败；协议不提供自动刷新或重新取票。
+8. 受管理版本只能通过 `bk-cli plugin update <名称>` 更新。插件自己的自更新命令在
+   `BK_CLI_PLUGIN_PROTOCOL` 存在时必须拒绝执行。
 
 单独执行第三方 CLI 时，原有认证方式不受影响。
+
+插件在协议模式下自行替换可执行文件会破坏 bk-cli 的摘要校验，后续调用报
+`plugin_digest_mismatch`。恢复时使用
+`bk-cli plugin install <名称> --version <已安装版本>`，不要继续运行插件自己的更新器。
 
 ## 5. 接入审核清单
 
@@ -127,7 +133,9 @@ BK_CLI_PLUGIN_PROTOCOL 存在：
 3. 不提供加载用户代码、执行 shell 或 hook、加载外部插件的入口；如果存在，这些路径拿不到凭据。
 4. 分发产物中不内置任何应用 secret。
 5. 自身不使用退出码 125。
-6. 以 `CGO_ENABLED=0` 静态构建，使 `LD_PRELOAD`、`DYLD_INSERT_LIBRARIES`
+6. 自更新命令在 `BK_CLI_PLUGIN_PROTOCOL` 存在时必须拒绝执行；受管理版本只允许通过
+   `bk-cli plugin update` 更新。
+7. 以 `CGO_ENABLED=0` 静态构建，使 `LD_PRELOAD`、`DYLD_INSERT_LIBRARIES`
    等动态库注入无效；宿主因此不必清理这类环境变量。
 
 ## 6. 申请收录

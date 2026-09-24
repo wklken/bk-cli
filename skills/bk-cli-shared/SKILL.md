@@ -46,7 +46,11 @@ bk-cli doctor --offline
 - 插件名之后的参数、输出格式、退出码都属于第三方，不能假设是 bk-cli JSON envelope。
 - 退出码 125 表示 bk-cli 在启动插件前失败，stderr 中有 `plugin_*` 错误码；其他退出码
   来自第三方。
-- 版本未收录时升级 bk-cli；摘要校验失败时重新安装，不要尝试绕过校验。
+- 受管理插件只能通过 `bk-cli plugin update <名称>` 更新，不要运行插件自己的自更新命令
+  （例如 `bk-cli bkms update`）。自更新会替换受管理二进制，后续调用将报
+  `plugin_digest_mismatch`；使用
+  `bk-cli plugin install <名称> --version <已安装版本>` 恢复。
+- 版本未收录时升级 bk-cli；其他摘要校验失败也应按已安装版本重新安装，不要尝试绕过校验。
 - 当前 bkms-cli v1.0.4 不共享 bk-cli 凭据，仍按 bkms-cli 自己的方式认证；凭据共享需要
   未来实现协议 v1 且以 `auth: shared` 通过审核的新版本。
 

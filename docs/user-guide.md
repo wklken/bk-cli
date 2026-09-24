@@ -422,6 +422,14 @@ bk-cli plugin update bkms
 bk-cli plugin remove bkms
 ```
 
+受管理插件只能通过 `bk-cli plugin update <名称>` 更新，不要运行插件自己的自更新命令
+（例如 `bk-cli bkms update`）。插件自更新会替换 bk-cli 管理的可执行文件，之后的调用将
+因 `plugin_digest_mismatch` 失败。此时按原安装版本恢复：
+
+```bash
+bk-cli plugin install <名称> --version <已安装版本>
+```
+
 `install`、`update` 和 `remove` 支持 `--dry-run` 预览。`bk-cli help bkms` 显示
 宿主目录中的插件描述、安装状态，以及查看第三方帮助的提示；`bk-cli bkms --help` 只有在
 插件已安装时才会交给第三方。`bk-cli --help bkms` 和 `bk-cli -h bkms` 仍显示根帮助，
@@ -438,7 +446,11 @@ bk-cli plugin remove bkms
 - `plugin_version_not_allowed`：升级 bk-cli 以取得更新的审核目录；如果本地装的是已撤销
   或已移除的旧版本，也可以运行 `bk-cli plugin update <名称>` 切换到推荐版本。
 - `plugin_digest_mismatch`：受管理的归档或可执行文件与目录摘要不一致，重新运行
-  `bk-cli plugin install <名称>`；离线安装时重新取得对应版本和平台的官方归档。
+  `bk-cli plugin install <名称> --version <已安装版本>`；离线安装时重新取得对应版本和
+  平台的官方归档。
+- `plugin_state_invalid`：安装记录损坏。删除错误 hint 中给出的完整
+  `<配置目录>/plugins/installed.yaml` 路径，然后用
+  `bk-cli plugin install <名称> --version <原安装版本>` 重新安装所需插件。
 - `plugin_unsupported_host_flag`：把第三方 flag 移到插件名之后；插件名前只保留
   `--context`。
 - 退出码 125：失败发生在 bk-cli 启动插件之前，读取 stderr 中的 `plugin_*` 错误；
