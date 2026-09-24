@@ -229,6 +229,26 @@ var _ = Describe("LoadSession", func() {
 		_, err := LoadSession("missing", "none")
 		expectPluginError(err, CodeContextError)
 	})
+	It("fails instead of picking another context when no active or default context exists", func() {
+		Expect(os.Remove(filepath.Join(config.BaseDirectory(), "current"))).To(Succeed())
+		s, err := LoadSession("", "shared")
+		expectPluginError(err, CodeContextError)
+		Expect(s).To(Equal(Session{}))
+		Expect(err.Error()).NotTo(ContainSubstring("alpha-token"))
+	})
+	It("uses the default context when no active context exists", func() {
+		Expect(os.Remove(filepath.Join(config.BaseDirectory(), "current"))).To(Succeed())
+		Expect(
+			config.CreateContext(
+				"default",
+				&config.Config{BkAPIURLTmpl: "https://default.example/api/{gateway_name}/"},
+			),
+		).To(Succeed())
+		s, err := LoadSession("", "shared")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s.Context.Name).To(Equal("default"))
+		Expect(s.Auth).To(BeNil())
+	})
 	It("fails for corrupted credentials instead of degrading", func() {
 		Expect(os.WriteFile(config.CredentialsPath("alpha"), []byte("corrupted"), 0o600)).To(Succeed())
 		_, err := LoadSession("", "shared")

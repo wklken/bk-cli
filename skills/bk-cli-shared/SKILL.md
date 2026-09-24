@@ -89,7 +89,8 @@ bk-cli api bk-iam GET /api/v2/systems/ --context devops
 
 - 每个 context 都维护自己的一套凭据和默认项。
 - `bk-cli auth login` 会把凭据写入当前 active context，或写入 `--context <name>` 指定的 context。
-- 命令执行时 context 来源优先级是：显式 `--context`，当前 active context，本地已有 context 的 fallback。
+- 命令执行时 context 来源优先级是：显式 `--context`，当前 active context，名为 `default` 的 context。
+- 没有 active context 也没有 `default`、但存在其他 context 时，命令会报错；按提示执行 `bk-cli context use <name>` 或加 `--context <name>`。
 - 显式指定不存在的 `--context` 会直接报错，不会静默回退。
 - context 名称必须匹配 `^[a-z][a-z0-9-]*$`，例如 `default`、`clouds`、`prod-1`。
 - tenant 是 context 的默认值；单次覆盖租户时使用 `--header 'X-Bk-Tenant-Id:<value>'`。

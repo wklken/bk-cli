@@ -56,6 +56,10 @@ argv 或文件传递。构造子进程环境时，宿主先删除继承环境中
 `--context` 用于同时选择环境与凭据来源。插件不读取宿主配置目录，也不依赖宿主
 context 或凭据加密文件的结构。
 
+"所选 context"依次取：显式 `--context`、宿主 active context、名为 `default` 的 context。
+三者都不适用但宿主存在其他 context 时，宿主报 `plugin_context_error`，不会按名称挑选
+其中一个 context 传给插件。
+
 | 宿主状态 | `CONTEXT` | `AUTH` |
 | --- | --- | --- |
 | 目录版本为 `auth: none` | 所选 context 的环境信息 | `null`，不读取凭据 |
@@ -63,6 +67,7 @@ context 或凭据加密文件的结构。
 | `auth: shared`，context 已初始化但未登录 | 所选 context 的环境信息 | `null` |
 | 未初始化任何 context 且未指定 `--context` | `null` | `null` |
 | 显式指定的 context 不存在 | 宿主报 `plugin_context_error` | — |
+| 无 active context、无 `default`，但存在其他 context | 宿主报 `plugin_context_error` | — |
 | 凭据文件损坏或无法解密 | 宿主报 `plugin_credential_error` | — |
 | 存储中 `bk_token` 与 `bk_ticket` 同时存在 | 宿主报 `plugin_credential_error`（凭据歧义） | — |
 

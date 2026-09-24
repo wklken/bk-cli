@@ -501,9 +501,9 @@ timeout: 60s
 
 1. 显式 `--context`
 2. 当前 active context
-3. 如果没有 active 标记但本地已有 context，则回退到第一个现有 context，并把它写回为 active
+3. 如果没有 active 标记，则使用名为 `default` 的 context（`context init` 创建的就是它）；会修改状态的命令会把它写回为 active，只读命令（`context status`、`doctor`、插件执行）不写回
 
-如果本地还没有任何 context，命令应报错并提示先执行 `bk-cli context init --bk_api_url_tmpl=...`。对于显式指定但不存在的 context，CLI 也应返回错误，而不是静默降级。
+如果没有 active 标记，本地也没有 `default`，但存在其他 context，命令应报错并提示 `bk-cli context use NAME` 或 `--context NAME`，而不是按名称挑选其中一个。如果本地还没有任何 context，命令应报错并提示先执行 `bk-cli context init --bk_api_url_tmpl=...`；只读命令此时视为"没有 context"。对于显式指定但不存在的 context，CLI 也应返回错误，而不是静默降级。
 
 ## 9. 请求构造与认证头
 

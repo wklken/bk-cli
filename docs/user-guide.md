@@ -261,6 +261,8 @@ bk-cli context status
 bk-cli api bk-iam GET /api/v2/systems/ --context dev
 ```
 
+没有 active context 时，bk-cli 使用 `default` context。如果从未执行过 `context init`，只用 `context create` 建过其他 context，命令会报错，不会自动挑选其中一个；先执行 `bk-cli context use <name>`，或在命令上传 `--context <name>`。
+
 ### 管理认证信息
 
 ```

@@ -119,7 +119,8 @@ func ProjectCredential(c *credential.Credential) (*AuthPayload, error) {
 }
 
 // LoadSession resolves the context environment and, for auth "shared", the credential payload.
-// It never creates files and never falls back to another context.
+// It never creates files. The context is --context, the active context, or "default";
+// when none of these applies but other contexts exist, it fails instead of picking one.
 func LoadSession(contextOverride, auth string) (Session, error) {
 	name, cfg, err := config.ResolveContextReadOnly(contextOverride)
 	if err != nil {
