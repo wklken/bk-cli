@@ -600,6 +600,20 @@ var _ = Describe("managed plugin edge cases", func() {
 		expectPluginError(err, CodeIOError)
 	})
 
+	It("reports invalid process, lock, staging, archive, and managed paths", func() {
+		base := GinkgoT().TempDir()
+		m := testManager(base, "linux-amd64", "https://unused.invalid", tarRelease("v1.0.4", "x"))
+
+		Expect(processAlive(-1)).To(BeFalse())
+		_, err := lockPID(filepath.Join(base, "missing.lock"))
+		Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
+		expectPluginError(m.cleanStagingDirs(), CodeIOError)
+		expectPluginError(validateLocalArchive("invalid\x00archive"), CodeIOError)
+		Expect(m.ensureNoSymlinks(filepath.Join(base, "outside"))).To(
+			MatchError(ContainSubstring("outside the plugin directory")),
+		)
+	})
+
 	It("rejects symlinked and non-directory activation paths", func() {
 		base := GinkgoT().TempDir()
 		m := testManager(base, "linux-amd64", "https://unused.invalid", tarRelease("v1.0.4", "x"))
