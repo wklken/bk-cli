@@ -134,6 +134,7 @@ var _ = Describe("plugin process", Ordered, func() {
 		var status *ExitStatus
 		Expect(errors.As(err, &status)).To(BeTrue())
 		Expect(status.Code).To(Equal(7))
+		Expect(status.Error()).To(Equal("plugin exited with status 7"))
 		Expect(stdout.String()).To(BeEmpty())
 		Expect(stderr.String()).To(Equal("probe-exit\n"))
 	})
@@ -219,6 +220,18 @@ var _ = Describe("plugin process", Ordered, func() {
 			`{"name":"alpha","bk_api_url_tmpl":"https://alpha.example/{gateway_name}/"}`,
 		))
 		Expect(got.Auth).To(Equal("null"))
+	})
+
+	It("reports context resolution failures after verifying the executable", func() {
+		GinkgoT().Setenv("BK_CLI_CONFIG_DIR", GinkgoT().TempDir())
+		m := installProbe("none")
+		err := m.Run(
+			"bkms",
+			"missing",
+			nil,
+			Streams{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard},
+		)
+		expectPluginError(err, CodeContextError)
 	})
 
 	It("shares the selected context credentials for auth shared", func() {
