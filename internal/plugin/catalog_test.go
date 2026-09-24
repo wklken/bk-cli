@@ -45,10 +45,11 @@ plugins:
         status: revoked
 `
 
-func expectPluginError(err error, code string) {
+func expectPluginError(err error, code string) *Error {
 	var pErr *Error
 	ExpectWithOffset(1, errors.As(err, &pErr)).To(BeTrue(), "error %v is not *plugin.Error", err)
 	ExpectWithOffset(1, pErr.Code).To(Equal(code))
+	return pErr
 }
 
 var _ = Describe("embedded catalog", func() {
@@ -93,6 +94,11 @@ var _ = Describe("catalog resolve", func() {
 	It("rejects unknown plugins", func() {
 		_, err := c.Resolve("nope", "", "linux-amd64")
 		expectPluginError(err, CodeUnknown)
+	})
+	It("suggests the catalog version when only the leading v is missing", func() {
+		_, err := c.Resolve("bkms", "1.0.4", "linux-amd64")
+		pErr := expectPluginError(err, CodeVersionNotAllowed)
+		Expect(pErr.Hint).To(ContainSubstring("v1.0.4"))
 	})
 	DescribeTable("rejects versions that are not allowed",
 		func(version string) {

@@ -26,6 +26,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -342,10 +343,43 @@ var _ = Describe("plugin installation", func() {
 	It("returns busy while another operation holds the lock", func() {
 		rel := tarRelease("v1.0.4", "x")
 		m := testManager(base, "linux-amd64", "https://unused.invalid", rel)
-		Expect(os.MkdirAll(filepath.Join(base, "plugins"), 0o700)).To(Succeed())
-		Expect(os.WriteFile(filepath.Join(base, "plugins", ".lock"), []byte("123"), 0o600)).To(Succeed())
+		pluginsDir := filepath.Join(base, "plugins")
+		lockPath := filepath.Join(pluginsDir, ".lock")
+		Expect(os.MkdirAll(pluginsDir, 0o700)).To(Succeed())
+		Expect(os.WriteFile(lockPath, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o600)).To(Succeed())
 		_, err := m.Install(context.Background(), "bkms", InstallOptions{})
-		expectPluginError(err, CodeBusy)
+		pErr := expectPluginError(err, CodeBusy)
+		Expect(pErr.Hint).To(ContainSubstring(lockPath))
+	})
+
+	It("takes over a lock held by a dead process", func() {
+		rel := tarRelease("v1.0.4", "x")
+		m := testManager(base, "linux-amd64", "https://unused.invalid", rel)
+		pluginsDir := filepath.Join(base, "plugins")
+		lockPath := filepath.Join(pluginsDir, ".lock")
+		const deadPID = 2147483647
+		Expect(processAlive(deadPID)).To(BeFalse())
+		Expect(os.MkdirAll(pluginsDir, 0o700)).To(Succeed())
+		Expect(os.WriteFile(lockPath, []byte(fmt.Sprintf("%d\n", deadPID)), 0o600)).To(Succeed())
+
+		unlock, err := m.lock()
+		Expect(err).NotTo(HaveOccurred())
+		defer unlock()
+		Expect(os.ReadFile(lockPath)).To(Equal([]byte(fmt.Sprintf("%d\n", os.Getpid()))))
+	})
+
+	It("cleans leftover staging directories after acquiring the lock", func() {
+		rel := tarRelease("v1.0.4", "x")
+		m := testManager(base, "linux-amd64", "https://unused.invalid", rel)
+		staging := filepath.Join(base, "plugins", ".staging-leftover")
+		Expect(os.MkdirAll(staging, 0o700)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(staging, "archive"), []byte("partial"), 0o600)).To(Succeed())
+
+		unlock, err := m.lock()
+		Expect(err).NotTo(HaveOccurred())
+		defer unlock()
+		_, err = os.Stat(staging)
+		Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
 	})
 
 	It("checks the operation lock before reading state during update", func() {
@@ -355,7 +389,11 @@ var _ = Describe("plugin installation", func() {
 		Expect(os.MkdirAll(pluginsDir, 0o700)).To(Succeed())
 		state := []byte("plugins: [corrupted")
 		Expect(os.WriteFile(filepath.Join(pluginsDir, installedFileName), state, 0o600)).To(Succeed())
-		Expect(os.WriteFile(filepath.Join(pluginsDir, ".lock"), []byte("123"), 0o600)).To(Succeed())
+		Expect(os.WriteFile(
+			filepath.Join(pluginsDir, ".lock"),
+			[]byte(fmt.Sprintf("%d\n", os.Getpid())),
+			0o600,
+		)).To(Succeed())
 
 		_, err := m.Update(context.Background(), "bkms")
 		expectPluginError(err, CodeBusy)
@@ -389,7 +427,11 @@ var _ = Describe("plugin installation", func() {
 			0o600,
 		)).To(Succeed())
 		_, err := m.InstalledVersion("bkms")
-		expectPluginError(err, CodeStateInvalid)
+		pErr := expectPluginError(err, CodeStateInvalid)
+		statePath := filepath.Join(base, "plugins", installedFileName)
+		Expect(pErr.Hint).To(ContainSubstring(statePath))
+		Expect(pErr.Hint).To(ContainSubstring("delete"))
+		Expect(pErr.Hint).To(ContainSubstring("reinstall"))
 	})
 })
 
@@ -506,7 +548,16 @@ var _ = Describe("managed plugin edge cases", func() {
 		_, err := m.Install(context.Background(), "bkms", InstallOptions{
 			FromFile: filepath.Join(base, "missing.tar.gz"),
 		})
-		expectPluginError(err, CodeIOError)
+		pErr := expectPluginError(err, CodeArchiveInvalid)
+		Expect(pErr.ExitCode).To(Equal(1))
+		Expect(pErr.Message).To(ContainSubstring(filepath.Join(base, "missing.tar.gz")))
+
+		archiveDir := filepath.Join(base, "archive-dir")
+		Expect(os.MkdirAll(archiveDir, 0o700)).To(Succeed())
+		_, err = m.Install(context.Background(), "bkms", InstallOptions{FromFile: archiveDir})
+		pErr = expectPluginError(err, CodeArchiveInvalid)
+		Expect(pErr.ExitCode).To(Equal(1))
+		Expect(pErr.Message).To(ContainSubstring(archiveDir))
 
 		file := filepath.Join(GinkgoT().TempDir(), "release.tar.gz")
 		Expect(os.WriteFile(file, archive, 0o600)).To(Succeed())

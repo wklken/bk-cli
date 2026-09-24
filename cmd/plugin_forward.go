@@ -147,7 +147,20 @@ Examples:
 			Annotations:        map[string]string{pluginAnnotation: "true"},
 			DisableFlagParsing: true,
 			Args:               cobra.ArbitraryArgs,
-			RunE:               func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return plugincmd.ReportError(
+					cmd.ErrOrStderr(),
+					pluginlib.UserError(
+						pluginlib.CodeUnsupportedHostFlag,
+						fmt.Sprintf("unsupported host flag before plugin %q", name),
+						fmt.Sprintf(
+							"Only --context is allowed before the plugin name; put plugin flags after %q",
+							name,
+						),
+					),
+					pluginlib.ExitHostFailure,
+				)
+			},
 		})
 	}
 	sort.Strings(skipped)

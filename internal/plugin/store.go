@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -108,7 +109,7 @@ func (m *Manager) Installed() (map[string]string, error) {
 		return nil, SystemError(
 			CodeStateInvalid,
 			fmt.Sprintf("invalid %s: %v", path, err),
-			"Run: bk-cli plugin remove <name>, then install again",
+			invalidStateHint(path),
 		)
 	}
 	for name, version := range f.Plugins {
@@ -118,7 +119,7 @@ func (m *Manager) Installed() (map[string]string, error) {
 			return nil, SystemError(
 				CodeStateInvalid,
 				"invalid entry in "+path,
-				"Run: bk-cli plugin remove <name>, then install again",
+				invalidStateHint(path),
 			)
 		}
 	}
@@ -126,6 +127,13 @@ func (m *Manager) Installed() (map[string]string, error) {
 		f.Plugins = map[string]string{}
 	}
 	return f.Plugins, nil
+}
+
+func invalidStateHint(path string) string {
+	return fmt.Sprintf(
+		"To recover, delete %s and reinstall plugins with: bk-cli plugin install <name>",
+		path,
+	)
 }
 
 // InstalledVersion returns the installed version of name, or "" if not installed.
@@ -160,7 +168,7 @@ func (m *Manager) saveInstalled(plugins map[string]string) error {
 	return nil
 }
 
-// lock takes the plugin directory lock. Stale locks are never removed automatically.
+// lock takes the plugin directory lock, replacing a lock held by a process that is no longer alive.
 func (m *Manager) lock() (func(), error) {
 	if err := os.MkdirAll(m.pluginsDir(), 0o700); err != nil {
 		return nil, SystemError(CodeIOError, err.Error(), "")
@@ -169,26 +177,64 @@ func (m *Manager) lock() (func(), error) {
 		return nil, SystemError(CodeStateInvalid, err.Error(), "")
 	}
 	path := filepath.Join(m.pluginsDir(), ".lock")
-	// #nosec G304 -- fixed lock file under the plugin directory.
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return nil, SystemError(
-			CodeBusy,
-			"another plugin operation is in progress",
-			"If no bk-cli plugin command is running, delete "+path,
-		)
+	for {
+		// #nosec G304 -- fixed lock file under the plugin directory.
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			pid, readErr := lockPID(path)
+			if readErr != nil || processAlive(pid) {
+				return nil, SystemError(
+					CodeBusy,
+					"another plugin operation is in progress",
+					"If no bk-cli plugin command is running, delete "+path,
+				)
+			}
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, SystemError(CodeIOError, err.Error(), "")
+			}
+			continue
+		}
+		if err != nil {
+			return nil, SystemError(CodeIOError, err.Error(), "")
+		}
+		if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
+			_ = f.Close()
+			_ = os.Remove(path)
+			return nil, SystemError(CodeIOError, err.Error(), "")
+		}
+		if err := f.Close(); err != nil {
+			_ = os.Remove(path)
+			return nil, SystemError(CodeIOError, err.Error(), "")
+		}
+		if err := m.cleanStagingDirs(); err != nil {
+			_ = os.Remove(path)
+			return nil, err
+		}
+		return func() { _ = os.Remove(path) }, nil
 	}
+}
+
+func lockPID(path string) (int, error) {
+	// #nosec G304 -- the caller supplies the fixed lock path under the plugin directory.
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, SystemError(CodeIOError, err.Error(), "")
+		return 0, err
 	}
-	if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
-		_ = f.Close()
-		_ = os.Remove(path)
-		return nil, SystemError(CodeIOError, err.Error(), "")
+	return strconv.Atoi(strings.TrimSpace(string(data)))
+}
+
+func (m *Manager) cleanStagingDirs() error {
+	entries, err := os.ReadDir(m.pluginsDir())
+	if err != nil {
+		return SystemError(CodeIOError, err.Error(), "")
 	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
-		return nil, SystemError(CodeIOError, err.Error(), "")
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), ".staging-") {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(m.pluginsDir(), entry.Name())); err != nil {
+			return SystemError(CodeIOError, err.Error(), "")
+		}
 	}
-	return func() { _ = os.Remove(path) }, nil
+	return nil
 }

@@ -27,4 +27,16 @@ func hostSignals() []os.Signal { return []os.Signal{os.Interrupt} }
 // forwardSignal drops Ctrl-C/Ctrl-Break because the console delivers it to the child directly.
 func forwardSignal(_ *os.Process, _ os.Signal) {}
 
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	_ = process.Release()
+	return true
+}
+
 func exitCodeFromState(state *os.ProcessState) int { return state.ExitCode() }

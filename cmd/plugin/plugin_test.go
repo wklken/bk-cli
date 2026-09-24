@@ -157,6 +157,15 @@ var _ = Describe("plugin command", func() {
 		Expect(e.Error.Hint).To(ContainSubstring("upgrade bk-cli"))
 	})
 
+	It("suggests the v-prefixed catalog version", func() {
+		_, e, err := run(m, false, false, "install", "bkms", "--version", "1.0.4")
+		var cliErr *output.CLIError
+		Expect(errors.As(err, &cliErr)).To(BeTrue())
+		Expect(cliErr.ExitCode).To(Equal(1))
+		Expect(e.Error.Code).To(Equal("plugin_version_not_allowed"))
+		Expect(e.Error.Hint).To(ContainSubstring("v1.0.4"))
+	})
+
 	It("rejects --insecure for downloads", func() {
 		_, e, err := run(m, false, true, "install", "bkms")
 		Expect(err).To(HaveOccurred())

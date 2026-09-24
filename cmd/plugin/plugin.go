@@ -24,7 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"sort"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
@@ -100,6 +103,9 @@ Examples:
 		}
 		return context.Background()
 	}
+	managementContext := func(cmd *cobra.Command) (context.Context, context.CancelFunc) {
+		return signal.NotifyContext(cmdCtx(cmd), os.Interrupt, syscall.SIGTERM)
+	}
 
 	list := &cobra.Command{
 		Use:   "list",
@@ -124,6 +130,8 @@ Examples:
 		Short: "Install an approved plugin version",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, stop := managementContext(cmd)
+			defer stop()
 			if err := rejectInsecure(); err != nil {
 				return fail(cmd, err)
 			}
@@ -139,7 +147,7 @@ Examples:
 				return preview(cmd, "install", args[0], r, source)
 			}
 			res, err := manager.Install(
-				cmdCtx(cmd),
+				ctx,
 				args[0],
 				pluginlib.InstallOptions{Version: version, FromFile: fromFile},
 			)
@@ -157,6 +165,8 @@ Examples:
 		Short: "Update an installed plugin to the catalog recommended version",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, stop := managementContext(cmd)
+			defer stop()
 			if err := rejectInsecure(); err != nil {
 				return fail(cmd, err)
 			}
@@ -181,7 +191,7 @@ Examples:
 				}
 				return preview(cmd, "update", args[0], r, r.Asset.URL)
 			}
-			res, err := manager.Update(cmdCtx(cmd), args[0])
+			res, err := manager.Update(ctx, args[0])
 			if err != nil {
 				return fail(cmd, err)
 			}
@@ -194,6 +204,8 @@ Examples:
 		Short: "Remove an installed plugin",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			_, stop := managementContext(cmd)
+			defer stop()
 			if isDryRun() {
 				current, err := manager.InstalledVersion(args[0])
 				if err != nil {

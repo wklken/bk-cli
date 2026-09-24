@@ -234,10 +234,20 @@ func (c *Catalog) Resolve(name, version, platform string) (Resolved, error) {
 	}
 	rel, ok := def.Versions[version]
 	if !ok || rel.Status != "allowed" {
+		hint := "Run: bk-cli plugin list to see approved versions; upgrade bk-cli to get newly approved versions"
+		prefixedVersion := "v" + version
+		if version != "" && !strings.HasPrefix(version, "v") {
+			if _, exists := def.Versions[prefixedVersion]; exists {
+				hint = fmt.Sprintf(
+					"Use --version %s; plugin versions must include the leading v",
+					prefixedVersion,
+				)
+			}
+		}
 		return Resolved{}, UserError(
 			CodeVersionNotAllowed,
 			fmt.Sprintf("plugin %q version %q is not allowed by this bk-cli build", name, version),
-			"Run: bk-cli plugin list to see approved versions; upgrade bk-cli to get newly approved versions",
+			hint,
 		)
 	}
 	asset, ok := rel.Platforms[platform]

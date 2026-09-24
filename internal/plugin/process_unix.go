@@ -21,20 +21,33 @@
 package plugin
 
 import (
+	"errors"
 	"os"
 	"syscall"
 )
 
 func hostSignals() []os.Signal {
-	return []os.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP}
+	return []os.Signal{syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP}
 }
 
-// forwardSignal drops SIGINT because the terminal already delivers it to the whole foreground group.
+// forwardSignal drops terminal signals already delivered to the whole foreground group.
 func forwardSignal(p *os.Process, sig os.Signal) {
-	if sig == syscall.SIGINT {
+	if sig == syscall.SIGINT || sig == syscall.SIGQUIT {
 		return
 	}
 	_ = p.Signal(sig)
+}
+
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	err = process.Signal(syscall.Signal(0))
+	return !errors.Is(err, syscall.ESRCH) && !errors.Is(err, os.ErrProcessDone)
 }
 
 func exitCodeFromState(state *os.ProcessState) int {

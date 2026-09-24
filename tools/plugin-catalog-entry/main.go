@@ -18,11 +18,12 @@
 
 // Command plugin-catalog-entry prints a catalog.yaml version entry for an approved plugin release.
 //
-//	go run ./tools/plugin-catalog-entry \
-//	  --release-base-url
+// Example:
 //
-//	https://github.com/TencentBlueKing/blueking-service-governance/releases/download/bkms-cli/v1.0.4 \
-//		  --asset-template 'bkms-cli_{version}_{os}_{arch}' --executable bkms-cli --version v1.0.4 --auth none
+//	go run ./tools/plugin-catalog-entry \
+//	  --release-base-url https://example.com/releases/download/plugin/v1.0.4 \
+//	  --asset-template 'plugin_{version}_{os}_{arch}' \
+//	  --executable plugin --version v1.0.4 --auth none
 package main
 
 import (

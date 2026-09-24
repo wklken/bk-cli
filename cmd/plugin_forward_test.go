@@ -201,6 +201,18 @@ var _ = Describe("root plugin wiring", func() {
 		Expect(stderr.String()).To(ContainSubstring(`"plugin_unsupported_host_flag"`))
 	})
 
+	It("rejects combined host flags that reach the plugin stub with 125", func() {
+		root := newRootCmd()
+		var stdout, stderr bytes.Buffer
+		root.SetOut(&stdout)
+		root.SetErr(&stderr)
+
+		err := executeRoot(root, []string{"-vv", "bkms", "app", "delete", "x"})
+		Expect(cliExitCode(err)).To(Equal(125))
+		Expect(stderr.String()).To(ContainSubstring(`"plugin_unsupported_host_flag"`))
+		Expect(stdout.String()).To(BeEmpty())
+	})
+
 	It("keeps existing system routing untouched", func() {
 		root := newRootCmd()
 		err := executeRoot(root, []string{"sops", "start_taks", "-h"})

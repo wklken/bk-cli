@@ -49,6 +49,9 @@ func (m *Manager) Install(ctx context.Context, name string, opts InstallOptions)
 	if err != nil {
 		return InstallResult{}, err
 	}
+	if err := validateLocalArchive(opts.FromFile); err != nil {
+		return InstallResult{}, err
+	}
 	unlock, err := m.lock()
 	if err != nil {
 		return InstallResult{}, err
@@ -60,6 +63,31 @@ func (m *Manager) Install(ctx context.Context, name string, opts InstallOptions)
 		return InstallResult{}, err
 	}
 	return m.installLocked(ctx, r, opts, installed)
+}
+
+func validateLocalArchive(path string) error {
+	if path == "" {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return UserError(
+			CodeArchiveInvalid,
+			fmt.Sprintf("local plugin archive %q does not exist", path),
+			"Provide an existing official release archive",
+		)
+	}
+	if err != nil {
+		return SystemError(CodeIOError, fmt.Sprintf("inspect local plugin archive %q: %v", path, err), "")
+	}
+	if !info.Mode().IsRegular() {
+		return UserError(
+			CodeArchiveInvalid,
+			fmt.Sprintf("local plugin archive %q is not a regular file", path),
+			"Provide an official release archive file, not a directory",
+		)
+	}
+	return nil
 }
 
 func (m *Manager) installLocked(

@@ -166,12 +166,12 @@ var _ = Describe("plugin process", Ordered, func() {
 		Expect(status.Code).To(Equal(128 + int(syscall.SIGTERM)))
 	})
 
-	It("drops SIGINT and forwards SIGTERM to the child", func() {
+	It("drops SIGINT and SIGQUIT and forwards SIGTERM to the child", func() {
 		if runtime.GOOS == "windows" {
 			Skip("signals are unix-only")
 		}
 		pr, pw := io.Pipe()
-		signals := make(chan os.Signal, 2)
+		signals := make(chan os.Signal, 3)
 		done := make(chan error, 1)
 		go func() {
 			done <- runProcess(
@@ -189,6 +189,8 @@ var _ = Describe("plugin process", Ordered, func() {
 		go func() { _, _ = io.Copy(io.Discard, pr) }()
 
 		signals <- syscall.SIGINT
+		Consistently(done, 300*time.Millisecond).ShouldNot(Receive())
+		signals <- syscall.SIGQUIT
 		Consistently(done, 300*time.Millisecond).ShouldNot(Receive())
 		signals <- syscall.SIGTERM
 		var runErr error
