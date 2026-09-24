@@ -114,9 +114,7 @@ func ProjectCredential(c *credential.Credential) (*AuthPayload, error) {
 		}
 		return &AuthPayload{Type: "access_token", AccessToken: c.AccessToken}, nil
 	default:
-		return nil, credentialError(
-			fmt.Sprintf("credential type %q is not supported by plugin protocol v1", c.Type),
-		)
+		return nil, credentialError("credential type is not supported by plugin protocol v1")
 	}
 }
 

@@ -19,6 +19,7 @@
 package plugin
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,6 +86,9 @@ var _ = Describe("ProjectCredential", func() {
 			_, err := ProjectCredential(&c)
 			expectPluginError(err, CodeCredentialError)
 			Expect(err.Error()).NotTo(ContainSubstring("sentinel"))
+			var pErr *Error
+			Expect(errors.As(err, &pErr)).To(BeTrue())
+			Expect(pErr.Hint).NotTo(ContainSubstring("sentinel"))
 		},
 		Entry(
 			"token and ticket",
@@ -119,7 +123,7 @@ var _ = Describe("ProjectCredential", func() {
 			credential.Credential{Type: credential.TypeAccessToken, AccessToken: "sentinel", BkToken: "t"},
 		),
 		Entry("empty access token", credential.Credential{Type: credential.TypeAccessToken}),
-		Entry("unknown type", credential.Credential{Type: "personal_token", AccessToken: "sentinel"}),
+		Entry("unknown type", credential.Credential{Type: "sentinel", AccessToken: "other"}),
 		Entry("NUL byte", credential.Credential{Type: credential.TypeAccessToken, AccessToken: "sentinel\x00"}),
 	)
 })
