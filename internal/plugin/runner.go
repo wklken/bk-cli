@@ -55,7 +55,7 @@ func (m *Manager) Run(name, contextOverride string, args []string, streams Strea
 	if err != nil {
 		return err
 	}
-	// signal.Ignore would be inherited by the child across exec; Notify keeps the child's defaults.
+	// Ignoring host signals would affect the child across exec; Notify keeps the child's defaults.
 	signals := make(chan os.Signal, 4)
 	signal.Notify(signals, hostSignals()...)
 	defer signal.Stop(signals)
