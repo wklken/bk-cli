@@ -20,7 +20,15 @@
 
 package plugin
 
-import "os"
+import (
+	"math"
+	"os"
+	"syscall"
+)
+
+// processQueryLimitedInformation is PROCESS_QUERY_LIMITED_INFORMATION, which is granted across
+// integrity levels unlike the PROCESS_QUERY_INFORMATION right used by os.FindProcess.
+const processQueryLimitedInformation = 0x1000
 
 func hostSignals() []os.Signal { return []os.Signal{os.Interrupt} }
 
@@ -28,15 +36,17 @@ func hostSignals() []os.Signal { return []os.Signal{os.Interrupt} }
 func forwardSignal(_ *os.Process, _ os.Signal) {}
 
 func processAlive(pid int) bool {
-	if pid <= 0 {
+	if pid <= 0 || int64(pid) > math.MaxUint32 {
 		return false
 	}
-	process, err := os.FindProcess(pid)
+	h, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
 	if err != nil {
-		return false
+		return windowsOpenErrorAlive(err)
 	}
-	_ = process.Release()
-	return true
+	defer func() { _ = syscall.CloseHandle(h) }()
+	var code uint32
+	err = syscall.GetExitCodeProcess(h, &code)
+	return windowsExitCodeAlive(code, err)
 }
 
 func exitCodeFromState(state *os.ProcessState) int { return state.ExitCode() }
