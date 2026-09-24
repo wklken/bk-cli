@@ -34,18 +34,21 @@ const (
 	maxArchiveEntries        = 4096
 )
 
+// httpsOnlyRedirectPolicy rejects redirect chains that leave HTTPS.
+func httpsOnlyRedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("too many redirects")
+	}
+	if req.URL.Scheme != "https" {
+		return errors.New("redirect to non-https url rejected")
+	}
+	return nil
+}
+
 func newHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 5 * time.Minute,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return errors.New("too many redirects")
-			}
-			if req.URL.Scheme != "https" {
-				return errors.New("redirect to non-https url rejected")
-			}
-			return nil
-		},
+		Timeout:       5 * time.Minute,
+		CheckRedirect: httpsOnlyRedirectPolicy,
 	}
 }
 
