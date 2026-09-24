@@ -622,6 +622,9 @@ YAML 或 Go action 注册流程。内置目录 `internal/plugin/catalog.yaml` �
 - `BK_CLI_PLUGIN_CONTEXT=<JSON 或 null>`
 - `BK_CLI_PLUGIN_AUTH=<JSON 或 null>`
 
+构造子进程环境时，宿主先移除继承环境中的全部 `BK_CLI_PLUGIN_*` 变量，再写入本次调用
+的三个协议变量；Windows 上前缀匹配不区分大小写。
+
 `auth: none` 仍传递 context 环境信息，但 `AUTH` 为 `null` 且宿主不读取凭据；
 `auth: shared` 才投影当前 context 的完整凭据。当前 bkms-cli v1.0.4 登记为
 `auth: none`，尚未实现协议 v1，仍按自己的方式认证。凭据共享需要未来的 bkms-cli
@@ -631,7 +634,10 @@ YAML 或 Go action 注册流程。内置目录 `internal/plugin/catalog.yaml` �
 
 第三方 stdout/stderr 原样透传，不封装为 JSON。bk-cli 在启动第三方进程前失败时把
 `plugin_*` JSON envelope 写到 stderr 并固定返回 125；第三方正常退出时透传它的退出码，
-Unix 下因信号终止时返回 `128 + 信号编号`。第三方不得使用 125。
+Unix 下因信号终止时返回 `128 + 信号编号`，Windows 下返回子进程状态中的退出码。Unix
+宿主不会重复转发终端已送达前台进程组的 `SIGINT`，但会把 `SIGTERM` 和 `SIGHUP`
+转发给第三方并继续等待；Windows 控制台直接向第三方发送 Ctrl-C/Ctrl-Break，宿主不再
+转发。第三方不得使用 125。
 
 协议 JSON、第三方约束和 `auth: shared` 审核清单见
 [插件协议 v1](plugin-protocol.md)。
