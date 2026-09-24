@@ -59,11 +59,20 @@ func (m *Manager) Install(ctx context.Context, name string, opts InstallOptions)
 	if err != nil {
 		return InstallResult{}, err
 	}
+	return m.installLocked(ctx, r, opts, installed)
+}
+
+func (m *Manager) installLocked(
+	ctx context.Context,
+	r Resolved,
+	opts InstallOptions,
+	installed map[string]string,
+) (InstallResult, error) {
 	target := m.executablePath(r)
 	result := InstallResult{
-		Plugin: name, Version: r.Version, Platform: r.Platform, Path: target,
+		Plugin: r.Name, Version: r.Version, Platform: r.Platform, Path: target,
 	}
-	if installed[name] == r.Version && m.verify(r) == nil {
+	if installed[r.Name] == r.Version && m.verify(r) == nil {
 		return result, nil
 	}
 
@@ -109,13 +118,13 @@ func (m *Manager) Install(ctx context.Context, name string, opts InstallOptions)
 	if err := m.activate(r, platformDir); err != nil {
 		return InstallResult{}, err
 	}
-	previous := installed[name]
-	installed[name] = r.Version
+	previous := installed[r.Name]
+	installed[r.Name] = r.Version
 	if err := m.saveInstalled(installed); err != nil {
 		return InstallResult{}, err
 	}
 	if previous != "" && previous != r.Version {
-		_ = os.RemoveAll(filepath.Join(m.pluginsDir(), name, previous))
+		_ = os.RemoveAll(filepath.Join(m.pluginsDir(), r.Name, previous))
 	}
 	result.Changed = true
 	return result, nil
@@ -201,18 +210,28 @@ func (m *Manager) verify(r Resolved) error {
 
 // Update installs the catalog recommended version for an installed plugin.
 func (m *Manager) Update(ctx context.Context, name string) (InstallResult, error) {
-	current, err := m.InstalledVersion(name)
+	unlock, err := m.lock()
 	if err != nil {
 		return InstallResult{}, err
 	}
-	if current == "" {
+	defer unlock()
+
+	installed, err := m.Installed()
+	if err != nil {
+		return InstallResult{}, err
+	}
+	if installed[name] == "" {
 		return InstallResult{}, UserError(
 			CodeNotInstalled,
 			fmt.Sprintf("plugin %q is not installed", name),
 			"Run: bk-cli plugin install "+name,
 		)
 	}
-	return m.Install(ctx, name, InstallOptions{})
+	r, err := m.Catalog.Resolve(name, "", m.Platform)
+	if err != nil {
+		return InstallResult{}, err
+	}
+	return m.installLocked(ctx, r, InstallOptions{}, installed)
 }
 
 // Remove deletes an installed plugin. Names no longer in the catalog can still be removed.

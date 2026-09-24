@@ -348,6 +348,20 @@ var _ = Describe("plugin installation", func() {
 		expectPluginError(err, CodeBusy)
 	})
 
+	It("checks the operation lock before reading state during update", func() {
+		rel := tarRelease("v1.0.4", "x")
+		m := testManager(base, "linux-amd64", "https://unused.invalid", rel)
+		pluginsDir := filepath.Join(base, "plugins")
+		Expect(os.MkdirAll(pluginsDir, 0o700)).To(Succeed())
+		state := []byte("plugins: [corrupted")
+		Expect(os.WriteFile(filepath.Join(pluginsDir, installedFileName), state, 0o600)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(pluginsDir, ".lock"), []byte("123"), 0o600)).To(Succeed())
+
+		_, err := m.Update(context.Background(), "bkms")
+		expectPluginError(err, CodeBusy)
+		Expect(os.ReadFile(filepath.Join(pluginsDir, installedFileName))).To(Equal(state))
+	})
+
 	It("removes only the plugin directory and is idempotent", func() {
 		rel := tarRelease("v1.0.4", "x")
 		server, _ := serveReleases(rel)
